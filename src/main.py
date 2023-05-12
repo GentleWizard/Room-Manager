@@ -3,111 +3,161 @@ import os
 import dotenv
 from datetime import datetime
 import random
-dotenv.load_dotenv()
+import sqlalchemy
+from sqlalchemy import create_engine
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import sessionmaker
+
+
+###############################################
+#                   SQLITE                    #
+###############################################
+engine = create_engine('sqlite:///Guilds.db', echo=True)
+Base = declarative_base()
+Session = sessionmaker(bind=engine)
+session = Session()
+
+
+class Guild(Base):
+    __tablename__ = 'guild'
+    guild_id = Column(Integer, primary_key=True)
+    name = Column(String)
+    welcome_enabled = Column(Boolean)
+    leave_enabled = Column(Boolean)
+    welcome_channel = Column(Integer)
+    leave_channel = Column(Integer)
+    welcome_message = Column(String)
+    leave_message = Column(String)
+    welcome_type = Column(String)
+    moderation_channel = Column(Integer)
+    mod_role = Column(String)
+    users = relationship("User", back_populates="guild")
+
+
+class User(Base):
+    __tablename__ = 'user'
+    user_id = Column(Integer, primary_key=True)
+    name = Column(String)
+    discriminator = Column(Integer)
+    avatar = Column(String)
+    guild_id = Column(Integer, ForeignKey('guild.guild_id', ondelete='CASCADE'),
+                      index=True, nullable=False, depends_on='guild.guild_id')
+    banned = Column(Boolean)
+    banned_reason = Column(String)
+    banned_at = Column(DateTime)
+    banned_by = Column(String)
+    times_banned = Column(Integer)
+    guild = relationship("Guild", back_populates="users")
+
+
+Base.metadata.create_all(engine)
+#################################################
+dotenv.load_dotenv()                            #
 bot = discord.Bot(intents=discord.Intents.all())
-now = datetime.now()
+now = datetime.now()                            #
 formatted_time = now.strftime("%H:%M:%S")
+bot_token = os.getenv("BOT_TOKEN")              #
+bot_id = os.getenv("BOT_ID")                    #
+owner_id = os.getenv("OWNER_ID")               #
+#################################################
 
-config = {
-    "bot_token": os.getenv("BOT_TOKEN"),
-    "server_id": os.getenv("SERVER_ID"),
-    "bot_id": os.getenv("BOT_ID"),
-    "moderation_channel": 1065772341554053162,
-    "mod_role": "moderator",
-    "mod_role": None,
-    "trafic": {
-        "welcome_enabled": False,
-        "welcome_channel": None,
-        "welcome_message": None,
-        "leave_enabled": False,
-        "leave_channel": None,
-        "Leave_message": None,
-        "welcome_type": "dm",
-    },
-}
-
-guild_id = config["server_id"]
-bot_id = config["bot_id"]
-bot_token = config["bot_token"]
-mod_role = (config["mod_role"])
 ###############################################
 #                   COMMANDS                  #
 ###############################################
 
 
-@bot.slash_command(name="hello", description="Says hello to the user", guild_ids=[guild_id])
+@bot.slash_command(name="hello", description="Says hello to the user")
 async def hello(ctx):
     await ctx.respond(f"Hello {ctx.author.name}!")
 
 
-@bot.slash_command(name="welcome_channel", description="Sets the welcome channel", guild_ids=[guild_id])
+@bot.slash_command(name="welcome_channel", description="Sets the welcome channel")
 async def welcome_channel(ctx, channel: discord.Option(discord.SlashCommandOptionType.channel, required=True, description="The channel to send welcome messages in")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["welcome_channel"] = channel.id
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.welcome_channel = channel.id
+        session.commit()
         await ctx.respond(f"Welcome channel set to {channel.mention}", ephemeral=True)
+    else:
+        await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="welcome_message", description="Sets the welcome message", guild_ids=[guild_id])
+@bot.slash_command(name="welcome_message", description="Sets the welcome message")
 async def welcome_message(ctx, message: discord.Option(discord.SlashCommandOptionType.string, required=True, description="The message to send to new members")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles or user.id == server_owner_id:
-        config["trafic"]["welcome_message"] = message
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.welcome_message = message
+        session.commit()
         await ctx.respond(f"Welcome message set to {message}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="welcome_type", description="Sets the welcome type", guild_ids=[guild_id])
+@bot.slash_command(name="welcome_type", description="Sets the welcome type")
 async def welcome_type(ctx, type: discord.Option(discord.SlashCommandOptionType.string, required=True, description="Where to send the welcome message (dm or channel)")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["welcome_type"] = type
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.welcome_type = type
+        session.commit()
         await ctx.respond(f"Welcome type set to {type}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="leave_message", description="Sets the leave message", guild_ids=[guild_id])
+@bot.slash_command(name="leave_message", description="Sets the leave message")
 async def leave_message(ctx, message: discord.Option(discord.SlashCommandOptionType.string, required=True, description="The message to send the member leave channel")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["leave_message"] = message
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.leave_message = message
+        session.commit()
         await ctx.respond(f"Leave message set to {message}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="leave_channel", description="Sets the leave channel", guild_ids=[guild_id])
+@bot.slash_command(name="leave_channel", description="Sets the leave channel")
 async def leave_channel(ctx, channel: discord.Option(discord.SlashCommandOptionType.channel, required=True, description="The channel to send leave messages in")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["leave_channel"] = channel.id
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.leave_channel = channel.id
+        session.commit()
         await ctx.respond(f"Leave channel set to {channel.mention}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="welcome_enabled", description="Enables or disables welcome messages", guild_ids=[guild_id])
+@bot.slash_command(name="welcome_enabled", description="Enables or disables welcome messages")
 async def welcome_enabled(ctx, enabled: discord.Option(discord.SlashCommandOptionType.boolean, required=True, description="Whether to enable or disable welcome messages (True or False))")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["welcome_enabled"] = enabled
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.welcome_enabled = enabled
+        session.commit()
         await ctx.respond(f"Welcome messages set to {enabled}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="leave_enabled", description="Enables or disables leave messages", guild_ids=[guild_id])
+@bot.slash_command(name="leave_enabled", description="Enables or disables leave messages")
 async def leave_enabled(ctx, enabled: discord.Option(discord.SlashCommandOptionType.boolean, required=True, description="Whether to enable or disable leave messages (True or False))")):
     user = ctx.author
-    if user.guild_permissions.administrator or mod_role in user.roles:
-        config["trafic"]["leave_enabled"] = enabled
+    if user.guild_permissions.administrator or user.id == owner_id or user.id == bot_id:
+        guild = session.query(Guild).filter_by(guild_id=ctx.guild.id).first()
+        guild.leave_enabled = enabled
+        session.commit()
+        await ctx.respond(f"Leave messages set to {enabled}", ephemeral=True)
     else:
         await ctx.respond("You don't have permission to use this command.", ephemeral=True)
 
 
-@bot.slash_command(name="roll", description="Rolls a dice", guild_ids=[guild_id])
+@bot.slash_command(name="roll", description="Rolls a dice")
 async def roll(ctx, sides: discord.Option(discord.SlashCommandOptionType.integer, required=True, description="how many sides the dice has"), dice: discord.Option(discord.SlashCommandOptionType.integer, required=False, description="how many dice to roll")):
 
     if dice is None or dice == 0:
@@ -120,12 +170,12 @@ async def roll(ctx, sides: discord.Option(discord.SlashCommandOptionType.integer
         await ctx.respond(f"You rolled a {dice}d{sides} and got {sum(dice_list)}")
 
 
-@bot.slash_command(name="ping", description="Pings the bot.", guild_ids=[guild_id])
+@bot.slash_command(name="ping", description="Pings the bot.")
 async def ping(ctx):
     await ctx.respond(f"Pong! {int(bot.latency * 1000)}ms", ephemeral=True)
 
 
-@bot.slash_command(name="help", description="Shows the help menu", guild_ids=[guild_id])
+@bot.slash_command(name="help", description="Shows the help menu")
 async def help(ctx):
     embed = discord.Embed(
         title="Help", description="This is the help menu for the bot.", color=0x00ff00)
@@ -142,7 +192,7 @@ async def help(ctx):
     view.message = message
 
 
-@bot.slash_command(name="clean", description="Gets rid of all bots messages in specified range", guild_ids=[guild_id])
+@bot.slash_command(name="clean", description="Gets rid of all bots messages in specified range")
 async def clean_messages(ctx, amount: discord.Option(discord.SlashCommandOptionType.integer, required=True, description="how many messages to delete")):
     delete_amount = int(amount)
     if delete_amount > 100:
@@ -159,7 +209,7 @@ async def clean_messages(ctx, amount: discord.Option(discord.SlashCommandOptionT
     await ctx.respond(f"{delete_amount} messages deleted.", ephemeral=True)
 
 
-@bot.slash_command(name="embed_message", description="Creates an embeded message", guild_ids=[guild_id])
+@bot.slash_command(name="embed_message", description="Creates an embeded message")
 async def embed_message(ctx, title: discord.Option(discord.SlashCommandOptionType.string, required=True, description="Title of the embed"),
                         description: discord.Option(discord.SlashCommandOptionType.string, required=False, description="Description of the embed"),
                         field_one: discord.Option(discord.SlashCommandOptionType.string, required=False, description="The first field of the embed"),
@@ -445,42 +495,116 @@ class WelcomeSettingsModal(discord.ui.Modal):
 
 @bot.event
 async def on_member_join(member):
-    if config["trafic"]["welcome_enabled"] == True:
-        if config["trafic"]["welcome_type"] == "channel":
-            if config["trafic"]["welcome_channel"] == None:
-                if config["moderation_channel"] == None:
-                    await member.guild.owner.send("You have not set a Mod Channel for the server!")
-                    return
-                await bot.get_channel(config["moderation_channel"]).send("You have not set a user trafic Channel for the server! (join/leave notifs)")
-                return
-            else:
-                await member.guild.get_channel(config["trafic"]["channel"]).send(config["trafic"]["welcome_message"].replace("{member}", member.mention))
-        elif config["trafic"]["welcome_type"] == "dm":
-            await member.send(f"Welcome to the server, {member.mention}! Please read the rules and enjoy your stay!")
+    if member.bot:
+        return
+    else:
+        new_user = User(user_id=member.id, name=member.name, discriminator=member.discriminator,
+                        avatar=member.avatar.url, guild_id=member.guild.id)
+        session.merge(new_user)
+        session.commit()
+
+    guild = session.query(Guild).filter_by(guild_id=member.guild.id).first()
+
+    if guild.welcome_type == "channel":
+        channel = bot.get_channel(guild.welcome_channel)
+        message = guild.welcome_message
+        user = member.mention
+        server = member.guild
+        await channel.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+
+    elif guild.welcome_type == "dm":
+        message = guild.welcome_message
+        user = member.mention
+        server = member.guild
+        await member.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+
+    elif guild.welcome_type == "both":
+        channel = bot.get_channel(guild.welcome_channel)
+        message = guild.welcome_message
+        user = member.mention
+        server = member.guild
+        await channel.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+        await member.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+    elif guild.welcome_type == None:
+        channel = bot.get_channel(guild.moderation_channel)
+        message = guild.welcome_message
+        user = member.mention
+        server = member.guild
+        await member.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+        await channel.send(f"Please set a welcome type. (channel, dm, both)")
+    elif guild.welcome_channel is None:
+        channel = bot.get_channel(guild.welcome_channel)
+        message = guild.welcome_message
+        user = member.mention
+        server = member.guild
+        await member.guild.owner.send(f"{member.mention} has joined. Make sure to set a welcome channel, or set welcome type to 'dm'.")
+        await member.send(f"{message.format(user=user, server='**' + member.guild.name + '**')}")
+    else:
+        channel = bot.get_channel(guild.moderation_channel)
+        await channel.send(f"Error: Something went wrong displaying join message. Please contact the bot owner.")
+        return
 
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
+
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="Mr.Wizard#5853"))
 
 
 @bot.event
-async def on_member_ban(guild, user):
+async def on_member_ban(guild):
+    logs = await guild.audit_logs(limit=1, action=discord.AuditLogAction.ban).flatten()
+    logs = logs[0]
 
-    if config["moderation_channel"] == None:
-        await guild.owner.send("You have not set a Mod Channel for the server!")
-        return
-    await bot.get_channel(config["moderation_channel"]).send(f"{user} has been banned from the server.")
+    async def on_member_ban(guild, member):
+        logs = await guild.audit_logs(limit=1, action=discord.AuditLogAction.ban).flatten()
+        logs = logs[0]
+        if logs.target == member:
+            user = session.query(member).filter_by(
+                user_id=member.id, guild_id=member.guild.id).first()
+            if user is not None:
+                user.banned = True
+                user.banned_by = logs.user.name
+                user.banded_at = logs.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                user.ban_reason = logs.reason
+                user.times_banned += 1
+                session.commit()
+                print(
+                    f'Member {member.name} was banned by {logs.user.name} at {logs.created_at} with reason: {logs.reason}')
+            else:
+                print(f'Member {member.name} was not banned')
 
 
 @bot.event
 async def on_member_unban(guild, user):
-    if config["moderation_channel"] == None:
-        await guild.owner.send("You have not set a Mod Channel for the server!")
-        return
-    await bot.get_channel(config["moderation_channel"]).send(f"{user} has been unbanned from the server.")
+    user = session.query(User).filter_by(user_id=user.id).first()
+    user.banned = False
+    user.banned_by = None
+    user.banded_at = None
+    user.ban_reason = None
+    session.commit()
+    print(f'Member {user.name} was unbanned')
 
 
+# @bot.event
+# async def on_member_remove(member):
+#     try:
+#         await member.guild.fetch_ban(member)
+#         # The user has been banned
+#     except discord.NotFound:
+#         # The user has left
+
+
+@bot.event
+async def on_guild_join(guild):
+    new_guild = Guild(guild_id=guild.id, name=guild.name, welcome_enabled=False, welcome_channel=None,
+                      welcome_message=None, welcome_type="dm", leave_enabled=False, leave_channel=None, leave_message=None)
+    session.merge(new_guild)
+    session.commit()
+    print(f'Guild {guild.name} has been joined.')
+
+
+print(f"database: {sqlalchemy.__version__}")
 print(f"Using: Pycord {discord.__version__}")
 bot.run(bot_token)
