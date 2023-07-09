@@ -26,8 +26,8 @@ async def on_ready():
     logger.info(f"Commands: {len(bot.commands)}")
     logger.info(f"Version: {discord.__version__}")
     logger.info(f"Invite: https://discord.com/oauth2/authorize?client_id={bot.user.id}&scope=bot&permissions=8")
-    logger.info(f"Support: https://discord.gg/2Ug2RvX")
-    logger.info(f"Github: ")
+    logger.info(f"Support: https://github.com/GentleWizard/Room-Manager/issues")
+    logger.info(f"Github: https://github.com/GentleWizard/Room-Manager")
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="you"))
     await bot.change_presence(status=discord.Status.online)
 
